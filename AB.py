@@ -1,7 +1,7 @@
-import sys
 from string import ascii_lowercase as alphabet
 
-# Helper functions to aid in your implementation. Can edit/remove
+MAX = True
+MIN = False
 
 def find_col(pos):
     return ord(pos[0]) - ord('a')
@@ -72,12 +72,52 @@ class Game:
         self.black_positions = {k: v[0] for k,v in board.items() if black_string == v[1]}
         self.white_positions = {k: v[0] for k,v in board.items() if black_string != v[1]}
 
+    #Implement your minimax with alpha-beta pruning algorithm here.
+    def ab(self, num_moves_without_capture, depth, alpha, beta, player):
+        
+        # Checks if we are at a leaf node, or if MAX/MIN cannot make any more moves
+        if depth == 0 or self.is_terminal() or num_moves_without_capture == 50:
+            return self.evaluation(alpha, beta) # Evaluation of Leaf Nodes
+
+        elif player is MAX:
+            maxEval = float('-inf')
+            for move in self.actions(player): # Move Ordering done here
+                num_moves_without_capture = self.execute_move(move, num_moves_without_capture)
+                eval = self.ab(num_moves_without_capture, depth - 1, alpha, beta, MIN)
+                maxEval = max(maxEval, eval)
+                alpha = max(maxEval, alpha)
+                if beta <= alpha:
+                    break
+
+        elif player is MIN:
+            minEval = float('inf')
+            for move in self.actions(player): # Move Ordering done here
+                num_moves_without_capture = self.execute_move(move, num_moves_without_capture)
+                eval = self.ab(num_moves_without_capture, depth - 1, alpha, beta, MAX)
+                minEval = min(minEval, eval)
+                beta = min(minEval, beta)
+                if beta <= alpha:
+                    break
+    
+    #TODO
+    def is_terminal(self):
+        pass
+
+    #TODO
+    def actions(player):
+        pass
+
+    #TODO
+    def execute_move(self, move, num_moves_without_capture):
+        pass
+    
+    #TODO
+    def evaluation(self, alpha, beta):
+        pass
+
 class State:
     pass
 
-#Implement your minimax with alpha-beta pruning algorithm here.
-def ab():
-    pass
 
 def print_game(gameboard):
     horizontal_line = '-' * gameboard.n * 4
@@ -95,7 +135,7 @@ def print_game(gameboard):
         print(row_string)
         print(horizontal_line)
 
-pieces = {
+starting_pieces = {
         ("e", 4) : ("King", "Black"),
         ("d", 4): ("Queen", "Black"),
         ("c", 4): ("Bishop", "Black"),
@@ -134,11 +174,13 @@ pieces = {
 # move example: (('a', 0), ('b', 3))
 
 def studentAgent(gameboard):
-    # You can code in here but you cannot remove this function, change its parameter or change the return type
+    # MAX is always White piece
+
     game_board = Game(gameboard)
     print_game(game_board)
-    move = (None, None)
+    
+    move = game_board.ab()
     return move #Format to be returned (('a', 0), ('b', 3))
 
-studentAgent(pieces)
-# Note: Comment when submitting
+studentAgent(starting_pieces)
+# Note: Comment when submitting 
