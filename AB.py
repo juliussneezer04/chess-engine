@@ -2,6 +2,8 @@ from string import ascii_lowercase as alphabet
 
 MAX = True
 MIN = False
+NEG_INF = float('-inf')
+POS_INF = float('inf')
 
 def find_col(pos):
     return ord(pos[0])
@@ -234,6 +236,7 @@ class Game:
         #       2) The move takes a piece ranked by most valuable piece it can take (King > Queen > Bishop > Rook > Knight > Pawn)
         #       3) The move brings threatens centre pieces (b1 to d3)
         # Observation: Same color pieces act as obstacles for pieces
+        
         self.black_piece_threats = {}
         self.white_piece_threats = {}
         for piece_type, pos in self.black_pieces.items():
@@ -252,7 +255,7 @@ class Game:
             return self.evaluation(alpha, beta) # Evaluation of Leaf Nodes
 
         elif player is MAX:
-            maxEval = float('-inf')
+            maxEval = NEG_INF
             for move in self.actions(player): # Move Ordering done here
                 num_moves_without_capture = self.execute_move(move, num_moves_without_capture)
                 eval = self.ab(num_moves_without_capture, depth - 1, alpha, beta, MIN)
@@ -262,7 +265,7 @@ class Game:
                     break
 
         elif player is MIN:
-            minEval = float('inf')
+            minEval = POS_INF
             for move in self.actions(player): # Move Ordering done here
                 num_moves_without_capture = self.execute_move(move, num_moves_without_capture)
                 eval = self.ab(num_moves_without_capture, depth - 1, alpha, beta, MAX)
@@ -359,7 +362,7 @@ def studentAgent(gameboard):
     game_board = Game(gameboard)
     print_game(game_board)
     
-    move = game_board.ab(0, 4, float('-inf'), float('inf'), MAX)
+    move = game_board.ab(0, 4, NEG_INF, POS_INF, MAX)
     return move #Format to be returned (('a', 0), ('b', 3))
 
 studentAgent(starting_pieces)
