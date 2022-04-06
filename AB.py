@@ -21,30 +21,21 @@ def find_col(pos):
 def find_row(pos):
     return pos[1]
 
-def find_position(row: int, col: int) -> tuple:
-    return (chr(col + ord('a')), row)
+def find_position(row: int, col: int):
+    pos = (chr(col), row)
+    return pos
 
 '''
 Returns True iff pos is inside the gameboard
 '''
-def is_valid_position(row: int, col: int) -> bool:
+def is_valid_position(row: int, col: int):
     return (row < TOTAL and row >= 0 and col >= 97 and col < 102)
 
 '''
 Returns True iff pos can be captured or threatened, not blocked by same color piece
 '''
-def is_targetable_position(pos: tuple, gameboard: dict, is_black: bool) -> bool:
+def is_targetable_position(pos: tuple, gameboard: dict, is_black: bool):
     return is_black and gameboard[pos][1] == WHITE_STRING
-    
-# def is_threatening(pos, board: dict, is_black: bool):
-#     if pos not in board:
-#         return False
-#     else:
-#         piece_type, piece_color = board[pos]
-#         not_same_color = ((piece_color == "Black") ^ (is_black))
-#         if piece_type == "King" and not_same_color:
-#             .add(pos)
-#         return not_same_color
 
 class Piece:
     white_symbols = {
@@ -108,12 +99,11 @@ class Piece:
     
     Calls the appropriate function
     '''
-    def assign_threats(piece_type: str, current_pos_desc, gameboard: dict, is_black: bool):
+    def assign_threats(piece_type: str, current_pos_desc: tuple, gameboard: dict, is_black: bool):
         threatened_places = set()
 
         if piece_type == PAWN_STRING:
-            for pos in current_pos_desc:
-                Piece.pawn_threatens(pos, threatened_places, gameboard, is_black)
+            Piece.pawn_threatens(current_pos_desc, threatened_places, gameboard, is_black)
         if piece_type == "Rook" or piece_type == "Queen":
             Piece.rook_threatens(current_pos_desc, threatened_places, gameboard, is_black)
         if piece_type == "Bishop" or piece_type == "Queen":
@@ -141,7 +131,7 @@ class Piece:
             row = current_row + move[0]
             col = current_col + move[1]
             pos = find_position(row, col)
-            if is_valid_position(row, col) and (pos in gameboard) and is_targetable_position(pos, gameboard, is_black):
+            if is_valid_position(row, col) and (pos not in gameboard or (pos in gameboard and is_targetable_position(pos, gameboard, is_black))):
                 threat_set.add(pos)
 
     '''
@@ -156,21 +146,21 @@ class Piece:
             row = current_row + move[0]
             col = current_col + move[1]
             pos = find_position(row, col)
-            if is_valid_position(row, col) and (pos in gameboard) and is_targetable_position(pos, gameboard, is_black):
+            if is_valid_position(row, col) and (pos not in gameboard or (pos in gameboard and is_targetable_position(pos, gameboard, is_black))):
                 threat_set.add(pos)
     '''
     @param pos Position of Knight
     returns number of pieces the Knight threatens
     '''
-    def knight_threatens(pos: tuple, threat_set: set, gameboard: dict, is_black: bool):
-        current_row = find_row(pos)
-        current_col = find_col(pos)
+    def knight_threatens(current_pos: tuple, threat_set: set, gameboard: dict, is_black: bool):
+        current_row = find_row(current_pos)
+        current_col = find_col(current_pos)
 
         for move in Piece.knight_moveset:
             row = current_row + move[0]
             col = current_col + move[1]
             pos = find_position(row, col)
-            if is_valid_position(row, col) and (pos in gameboard) and is_targetable_position(pos, gameboard, is_black):
+            if is_valid_position(row, col) and (pos not in gameboard or (pos in gameboard and is_targetable_position(pos, gameboard, is_black))):
                 threat_set.add(pos)
 
     '''
@@ -297,7 +287,6 @@ class Piece:
 
     def is_checkmate(king_pos: tuple, enemy_threats):
         # Check King Moveset for intersection with enemy_threats
-        
         current_row = find_row(king_pos)
         current_col = find_col(king_pos)
         king_can_survive = True
@@ -400,7 +389,7 @@ class GameBoard:
                     self.black_pieces[piece_type] = pos
                 self.piece_score -= Piece.score[piece_type]
                 threat_set = Piece.assign_threats(piece_type, pos, board, True)
-                self.threat_score -= Piece.calculate_threat(threat_set, board)
+                self.threat_score -= Piece.calculate_threat(threat_set, board, set())
                 self.min_threats.update(threat_set)
         
         self.is_terminal_game = False
@@ -432,7 +421,7 @@ class GameBoard:
         moves.extend(Piece.moves_threatening_king(self.max_threats, self.black_king_weak_points))
 
         # Moves that will capture pieces
-        moves.extend(Piece.moves_attacking_others(self.capture_candidates, self.black_pieces, self.max_threats))
+        moves.extend(Piece.moves_attacking_others(self.black_capture_candidates, self.black_pieces, self.max_threats))
 
         return moves
 
@@ -506,13 +495,13 @@ def print_game(gameboard: GameBoard):
     print("  " + " | ".join(alphabet[:gameboard.n]))
     for i in range(gameboard.rows):
         row_string = str(i) + " "
-        for j in range(gameboard.cols):
+        for j in range(97, 97 + gameboard.cols):
             next_piece_str = " "
             current_piece = find_position(i, j)
-            if current_piece in gameboard.black_positions:
-                next_piece_str = Piece.black_symbols[(gameboard.black_positions[current_piece])]
-            elif current_piece in gameboard.white_positions:
-                next_piece_str = Piece.white_symbols[(gameboard.white_positions[current_piece])]
+            if current_piece in gameboard.board and gameboard.board[current_piece][1] != WHITE_STRING:
+                next_piece_str = Piece.black_symbols[(gameboard.board[current_piece][0])]
+            elif current_piece in gameboard.board and gameboard.board[current_piece][1] == WHITE_STRING:
+                next_piece_str = Piece.white_symbols[(gameboard.board[current_piece][0])]
             row_string += next_piece_str + " | "
         print(row_string)
         print(horizontal_line)
@@ -520,14 +509,16 @@ def print_game(gameboard: GameBoard):
 #Implement your minimax with alpha-beta pruning algorithm here.
 def ab(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta, player: bool):
     #  if we are at a leaf node, or if MAX/MIN cannot make any more moves
+    print_game(gameboard)
     if depth == 0 or gameboard.is_terminal() or num_moves_without_capture == 50:
         return gameboard.evaluation(num_moves_without_capture) # Evaluation of Leaf Nodes
-
-    elif player is MAX:
+    
+    moves = gameboard.actions(player)
+    if player is MAX:
         maxEval = NEG_INF
-        for move in gameboard.actions(player): # Move Ordering done here
+        for move in moves: # Move Ordering done here
             num_moves_without_capture, next_gameboard = gameboard.execute_move(move, num_moves_without_capture, False)
-            eval = gameboard.ab(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, MIN)
+            eval = ab(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, MIN)
             maxEval = max(maxEval, eval)
             alpha = max(maxEval, alpha)
             if beta <= alpha:
@@ -535,9 +526,9 @@ def ab(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta, play
 
     elif player is MIN:
         minEval = POS_INF
-        for move in gameboard.actions(player): # Move Ordering done here
+        for move in moves: # Move Ordering done here
             num_moves_without_capture, next_gameboard = gameboard.execute_move(move, num_moves_without_capture, True)
-            eval = gameboard.ab(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, MAX)
+            eval = ab(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, MAX)
             minEval = min(minEval, eval)
             beta = min(minEval, beta)
             if beta <= alpha:
@@ -591,10 +582,11 @@ def studentAgent(gameboard):
     black_pieces = {PAWN_STRING: []}
     white_pieces = {PAWN_STRING: []}
     game_board = GameBoard(gameboard, black_pieces, white_pieces)
-    print_game(game_board)
+    # print_game(game_board)
     
-    move = ab(0, 4, NEG_INF, POS_INF, MAX)
-    return move #Format to be returned (('a', 0), ('b', 3))
+    move = ab(game_board, 0, 4, NEG_INF, POS_INF, MAX)
+    print(move)
+    return move
 
 studentAgent(starting_pieces)
 # Note: Comment when submitting 
