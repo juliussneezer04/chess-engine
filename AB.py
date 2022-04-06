@@ -1,9 +1,16 @@
+from lzma import is_check_supported
 from string import ascii_lowercase as alphabet
 
+TOTAL = 5
 MAX = True
 MIN = False
 NEG_INF = float('-inf')
 POS_INF = float('inf')
+WHITE_STRING = "White"
+KING_STRING = "King"
+
+MOVE_PIECE_ORDER = ["Queen", "Rook", "Bishop", "Knight", "Pawn", "King"]
+VALUABLE_PIECE_ORDER = ["King", "Queen", "Rook", "Bishop", "Knight", "Pawn"]
 
 def find_col(pos):
     return ord(pos[0])
@@ -14,19 +21,28 @@ def find_row(pos):
 def find_position(row, col):
     return (chr(col + ord('a')), row)
 
+'''
+Returns True iff pos is inside the gameboard
+'''
 def is_valid_position(row, col):
-    return row < 5 and row >= 0 and col >= 97 and col < 102
+    return (row < TOTAL and row >= 0 and col >= 97 and col < 102)
 
-def is_threatening(row, col, board: dict, is_black: bool, checks: dict):
-    pos = find_position(row, col)
-    if pos not in board:
-        return False
-    else:
-        piece_type, piece_color = board[pos]
-        not_same_color = ((piece_color == "Black") ^ (is_black))
-        if piece_type == "King" and not_same_color:
-            checks.add(pos)
-        return not_same_color
+'''
+Returns True iff pos can be captured or threatened, not blocked by same color piece
+'''
+def is_targetable_position(pos: tuple, gameboard: dict, is_black: bool):
+    return is_black and gameboard[pos][1] == WHITE_STRING
+    
+
+# def is_threatening(pos, board: dict, is_black: bool):
+#     if pos not in board:
+#         return False
+#     else:
+#         piece_type, piece_color = board[pos]
+#         not_same_color = ((piece_color == "Black") ^ (is_black))
+#         if piece_type == "King" and not_same_color:
+#             .add(pos)
+#         return not_same_color
 
 class Piece:
     white_symbols = {
@@ -47,188 +63,296 @@ class Piece:
         "Pawn": "♙"
     }
 
+    score = {
+        "King": 100,
+        "Queen": 9,
+        "Rook": 5,
+        "Bishop": 4,
+        "Knight": 4,
+        "Pawn": 1
+    }
+
+    threatened_score = {
+        "King": 9,
+        "Queen": 4.5,
+        "Rook": 3,
+        "Bishop": 2,
+        "Knight": 2,
+        "Pawn": 0.5
+    }
+
+    white_pawn_attack_moveset = [(1, 1), (1, -1)]
+    black_pawn_attack_moveset = [(-1, 1), (-1, -1)]
+    white_pawn_moveset = [(1, 0)]
+    black_pawn_moveset = [(-1, 0)]
+    king_moveset = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+    knight_moveset = [(1, 2), (1, -2), (2, 1), (2, -1), (-1, 2), (-1, -2), (-2, 1), (-2, -1)] 
+
+    def calculate_threat(threat_set: set, board: dict):
+        score = 0
+        for pos in threat_set:
+            piece_type = board[pos][0]
+            score += Piece.threatened_score[piece_type]
+
+        return score
+
     '''
     @param piece_type The String Piece Type
     @param current_pos_desc Current Pawn Position (Pawn)
+    @param is_black Boolean if the piece that is attacking is black or not
     
     Calls the appropriate function
     '''
-    def assign_threats(piece_type, current_pos_desc, gameboard, is_black):
-        
-        threatened_places_set = set()
-        checks = {}
+    def assign_threats(piece_type: str, current_pos_desc, gameboard: dict, is_black: bool):
+        threatened_places = set()
 
         if piece_type == "Pawn":
             for pos in current_pos_desc:
-                Piece.pawn_threatens(pos, threatened_places_set, checks, gameboard, is_black)
-        elif piece_type == "Rook" or piece_type == "Queen":
-            Piece.rook_threatens(current_pos_desc, threatened_places_set, checks, gameboard, is_black)
-        elif piece_type == "Bishop" or piece_type == "Queen":
-            Piece.bishop_threatens(current_pos_desc, threatened_places_set, checks, gameboard, is_black)
-        elif piece_type == "Knight":
-            Piece.knight_threatens(current_pos_desc, threatened_places_set, checks, gameboard, is_black)
-        elif piece_type == "King":
-            Piece.king_threatens(current_pos_desc, threatened_places_set, checks, gameboard, is_black)
+                Piece.pawn_threatens(pos, threatened_places, gameboard, is_black)
+        if piece_type == "Rook" or piece_type == "Queen":
+            Piece.rook_threatens(current_pos_desc, threatened_places, gameboard, is_black)
+        if piece_type == "Bishop" or piece_type == "Queen":
+            Piece.bishop_threatens(current_pos_desc, threatened_places, gameboard, is_black)
+        if piece_type == "Knight":
+            Piece.knight_threatens(current_pos_desc, threatened_places, gameboard, is_black)
+        if piece_type == "King":
+            Piece.king_threatens(current_pos_desc, threatened_places, gameboard, is_black)
 
-        return threatened_places_set, checks
+        return threatened_places
         
     '''
     @param pos Position of Pawn e.g. ('a', 1)
-    returns number of pieces the Pawn threatens
+    Adds places that pawn threatens to threat_set
     '''
-    def pawn_threatens(pos: tuple, threat_set: set, checks: dict, gameboard: dict, is_black: bool):
+    def pawn_threatens(pos: tuple, threat_set: set, gameboard: dict, is_black: bool):
         current_row = find_row(pos)
         current_col = find_col(pos)
 
-        possible_moves = [(1, 1), (1, -1)]
-        for move in possible_moves:
+        moveset = Piece.black_pawn_attack_moveset if is_black else Piece.white_pawn_attack_moveset
+        for move in moveset:
             row = current_row + move[0]
             col = current_col + move[1]
-            if is_valid_position(row, col) and is_threatening(row, col, gameboard, is_black, checks):
-                threat_set.add(find_position(row, col))
+            pos = find_position(row, col)
+            if is_valid_position(row, col) and (pos in gameboard) and is_targetable_position(pos, gameboard, is_black):
+                threat_set.add(pos)
 
     '''
     @param pos Position of King
     returns number of pieces the King threatens
     '''
-    def king_threatens(pos: tuple, threat_set: set, checks: dict, gameboard: dict, is_black: bool):
+    def king_threatens(pos: tuple, threat_set: set, gameboard: dict, is_black: bool):
         current_row = find_row(pos)
         current_col = find_col(pos)
 
-        possible_moves = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
-        for move in possible_moves:
+        for move in Piece.king_moveset:
             row = current_row + move[0]
             col = current_col + move[1]
-            if is_valid_position(row, col) and is_threatening(row, col, gameboard, is_black, checks):
-                threat_set.add(find_position(row, col))
-
+            pos = find_position(row, col)
+            if is_valid_position(row, col) and (pos in gameboard) and is_targetable_position(pos, gameboard, is_black):
+                threat_set.add(pos)
     '''
     @param pos Position of Knight
     returns number of pieces the Knight threatens
     '''
-    def knight_threatens(pos: tuple, threat_set: set, checks: dict, gameboard: dict, is_black: bool):
+    def knight_threatens(pos: tuple, threat_set: set, gameboard: dict, is_black: bool):
         current_row = find_row(pos)
         current_col = find_col(pos)
 
-        possible_moves = [(1, 2), (1, -2), (2, 1), (2, -1), (-1, 2), (-1, -2), (-2, 1), (-2, -1)]
-        for move in possible_moves:
+        for move in Piece.knight_moveset:
             row = current_row + move[0]
             col = current_col + move[1]
-            if is_valid_position(row, col) and is_threatening(row, col, gameboard, is_black, checks):
-                threat_set.add(find_position(row, col))
+            pos = find_position(row, col)
+            if is_valid_position(row, col) and (pos in gameboard) and is_targetable_position(pos, gameboard, is_black):
+                threat_set.add(pos)
 
     '''
     @param pos
     returns number of pieces the Bishop threatens
     '''
-    def bishop_threatens(pos: tuple, threat_set: set, checks: dict, gameboard: dict, is_black: bool):
+    def bishop_threatens(pos: tuple, threat_set: set, gameboard: dict, is_black: bool):
         current_row = find_row(pos)
         current_col = find_col(pos)
 
-        min_end = 5
+        min_end = TOTAL
         
         # Left-to-right diagonal from piece
         for i in range(1, min_end):
             row_i = current_row + i
             col_i = current_col + i
+            pos = find_position(row_i, col_i)
             if not is_valid_position(row_i, col_i):
                 break
-            elif is_threatening(row_i, col_i):
-                    t += 1
+            if pos in gameboard:
+                if is_targetable_position(pos, gameboard, is_black):
+                    threat_set.add(pos)
+                break
+            else:
+                threat_set.add(pos)
 
         # right-to-left diagonal from piece
         for i in range(1, min_end):
             row_i = current_row - i
             col_i = current_col + i
+            pos = find_position(row_i, col_i)
             if not is_valid_position(row_i, col_i):
                 break
-            elif is_threatening(row_i, col_i):
-                    t += 1
+            if pos in gameboard:
+                if is_targetable_position(pos, gameboard, is_black):
+                    threat_set.add(pos)
+                break
+            else:
+                threat_set.add(pos)
             
         # Left-to-right diagonal before piece
         for i in range(1, min_end):
             row_i = current_row - i
             col_i = current_col - i
+            pos = find_position(row_i, col_i)
             if not is_valid_position(row_i, col_i):
                 break
-            elif is_threatening(row_i, col_i):
-                    t += 1
+            if pos in gameboard:
+                if is_targetable_position(pos, gameboard, is_black):
+                    threat_set.add(pos)
+                break
+            else:
+                threat_set.add(pos)
         
         # right-to-left diagonal from piece
         for i in range(1, min_end):
             row_i = current_row + i
             col_i = current_col - i
+            pos = find_position(row_i, col_i)
             if not is_valid_position(row_i, col_i):
                 break
-            elif is_threatening(row_i, col_i):
-                    t += 1
-
-        return t
+            if pos in gameboard:
+                if is_targetable_position(pos, gameboard, is_black):
+                    threat_set.add(pos)
+                break
+            else:
+                threat_set.add(pos)
 
     '''
     @param pos
     returns moves a Rook can do from pos
     '''
-    def rook_threatens(pos):
-        t = 0
+    def rook_threatens(pos: tuple, threat_set: set, gameboard: dict, is_black: bool):
         current_row = find_row(pos)
         current_col = find_col(pos)
 
-        for column in range(current_col + 1, Board.total):
+        for column in range(current_col + 1, TOTAL):
             #Same row all columns part of Rook's moves
             if not is_valid_position(current_row, column):
                 break
-            elif is_threatening(current_row, column):
-                t += 1
+            pos = find_position(current_row, column)
+            if pos in gameboard:
+                if is_targetable_position(pos, gameboard, is_black):
+                    threat_set.add(pos)
+                break
+            else:
+                threat_set.add(pos)
 
         for column in range(current_col - 1, -1, -1):
             #Same row all columns part of Rook's moves
             if not is_valid_position(current_row, column):
                 break
-            elif is_threatening(current_row, column):
-                t += 1
+            pos = find_position(current_row, column)
+            if pos in gameboard:
+                if is_targetable_position(pos, gameboard, is_black):
+                    threat_set.add(pos)
+                break
+            else:
+                threat_set.add(pos)
 
-        for row in range(current_row + 1, Board.total):
+        for row in range(current_row + 1, TOTAL):
             #Same column all rows part of Rook's moves
             if not is_valid_position(row, current_col):
                 break
-            elif is_threatening(row, current_col):
-                t += 1
+            pos = find_position(row, current_col)
+            if pos in gameboard:
+                if is_targetable_position(pos, gameboard, is_black):
+                    threat_set.add(pos)
+                break
+            else:
+                threat_set.add(pos)
 
         for row in range(current_row - 1, -1, -1):
             #Same column all rows part of Rook's moves
             if not is_valid_position(row, current_col):
                 break
-            elif is_threatening(row, current_col):
-                t += 1
+            pos = find_position(row, current_col)
+            if pos in gameboard:
+                if is_targetable_position(pos, gameboard, is_black):
+                    threat_set.add(pos)
+                break
+            else:
+                threat_set.add(pos)
 
-        return t
+    def is_checkmate(king_pos: tuple, enemy_threats: set):
+        # Check King Moveset for intersection with enemy_threats
+        current_row = find_row(king_pos)
+        current_col = find_col(king_pos)
+        threats = 0
+        for move in Piece.king_moveset:
+            row = current_row + move[0]
+            col = current_col + move[1]
+            if not is_valid_position(row, col):
+                threats += 1 #Cannot escape with this move
+            else:
+                pos = find_position(row, col)
+                if pos in enemy_threats:
+                    threats += 1
+        return threats == 8
 
 class Game:
-    n = 5
+    n = TOTAL
 
     def __init__(self, board):
-        self.rows = 5
-        self.cols = 5
-        black_string = "Black"
+        self.rows = TOTAL
+        self.cols = TOTAL
         self.gameboard = board
+        self.king_moves = set()
         self.black_pieces = {"Pawn": []}
         self.white_pieces = {"Pawn": []}
+        self.min_threats = set()
+        self.max_threats = set()
+        self.piece_score = 0
+        self.threat_score = 0
         
         for (pos, piece_info) in board.items():
             piece_type = piece_info[0]
             piece_color = piece_info[1]
-            if piece_color == black_string:
-                if piece_type == "Pawn":
-                    self.black_pieces[piece_type].append(pos)
-                else:
-                    self.black_pieces[piece_type] = pos
-            else:
+            if piece_color == WHITE_STRING:
                 if piece_type == "Pawn":
                     self.white_pieces[piece_type].append(pos)
                 else:
                     self.white_pieces[piece_type] = pos
+                self.piece_score += Piece.score[piece_type]
+                threat_set = Piece.assign_threats(piece_type, pos, board, False)
+                self.threat_score += Piece.calculate_threat(threat_set, board)
+                self.max_threats.union(threat_set)
 
+            else:
+                if piece_type == "Pawn":
+                    self.black_pieces[piece_type].append(pos)
+                else:
+                    self.black_pieces[piece_type] = pos
+                self.piece_score -= Piece.score[piece_type]
+                threat_set = Piece.assign_threats(piece_type, pos, board, True)
+                self.threat_score -= Piece.calculate_threat(threat_set, board)
+                self.min_threats.union(threat_set)
+
+        # self.white_pieces_under_threat = set() # Keep track of how many white pieces are threatened to be taken over
+        
+        self.is_terminal_game = False
+        
+        # Check if White King is threatened
+        if not KING_STRING in self.white_pieces and not KING_STRING in self.black_pieces:
+            self.is_terminal_game = True # Since a King is captured
+        elif KING_STRING in self.white_pieces:
+            white_king_pos = self.white_pieces[KING_STRING]
+            black_king_pos = self.black_pieces[KING_STRING]
+            self.is_terminal_game = Piece.is_checkmate(white_king_pos, self.min_threats) or Piece.is_checkmate(black_king_pos, self.max_threats)
+    
         # NEED: An O(1) way to tell if White/Black King cannot move to any position because it would be under check - isTerminal
         # NEED: Enumerate all possible white piece moves (Queen then Bishop then Rook then Knight then Pawn then King - since King cannot check another King) and rank moves based on if 
         #       Rank by:
@@ -236,23 +360,13 @@ class Game:
         #       2) The move takes a piece ranked by most valuable piece it can take (King > Queen > Bishop > Rook > Knight > Pawn)
         #       3) The move brings threatens centre pieces (b1 to d3)
         # Observation: Same color pieces act as obstacles for pieces
-        
-        self.black_piece_threats = {}
-        self.white_piece_threats = {}
-        for piece_type, pos in self.black_pieces.items():
-            threatened_positions, checks = Piece.assign_threats(piece_type, pos, board, True)
-            self.black_piece_threats[piece_type] = threatened_positions
-
-        for piece_type, pos in self.white_pieces.items():
-            threatened_positions, checks = Piece.assign_threats(piece_type, pos, board, False)
-            self.white_piece_threats[piece_type] = threatened_positions
 
     #Implement your minimax with alpha-beta pruning algorithm here.
     def ab(self, num_moves_without_capture, depth, alpha, beta, player):
         
-        # Checks if we are at a leaf node, or if MAX/MIN cannot make any more moves
+        #  if we are at a leaf node, or if MAX/MIN cannot make any more moves
         if depth == 0 or self.is_terminal() or num_moves_without_capture == 50:
-            return self.evaluation(alpha, beta) # Evaluation of Leaf Nodes
+            return self.evaluation(num_moves_without_capture) # Evaluation of Leaf Nodes
 
         elif player is MAX:
             maxEval = NEG_INF
@@ -275,24 +389,31 @@ class Game:
                     break
     
     '''
-    Returns True if the State is a Win, Loss or Draw State
+    Returns True if the State is a Win, Loss or Draw State - No Piece threatening each other
     '''
     def is_terminal(self):
-        # If King is under checkmate or threatened on all sides, Win for opposing side
-        # If no piece is threatening any other piece, draw
-        pass
-
-    #TODO
+        return self.is_terminal_game or (len(self.max_threats) == 0 and len(self.min_threats) == 0)
+    
     def actions(player):
-        pass
+        
 
     #TODO
     def execute_move(self, move, num_moves_without_capture):
         pass
     
-    #TODO
-    def evaluation(self, alpha, beta):
-        pass
+    '''
+    Returns 400 for win state, -400 for loss state, 0 for draw state, calculates piece and threats score to decide other states' value
+    '''
+    def evaluation(self, num_moves):
+        if self.is_terminal():
+            if KING_STRING in self.black_pieces and Piece.is_checkmate(self.black_pieces[KING_STRING], self.max_threats):
+                return 400 # Win State -  Arbitrarily Large Number
+            elif KING_STRING in self.black_pieces and Piece.is_checkmate(self.white_pieces[KING_STRING], self.min_threats):
+                return -400 # Loss State - Arbitrarily Small Number
+        elif num_moves >= 50 and KING_STRING in self.black_pieces and KING_STRING in self.white_pieces:
+            return 0 # Draw - Zero Value
+        else:
+            return self.threat_score + self.piece_score # Calculated Utility for this State               
 
 class State:
     pass
