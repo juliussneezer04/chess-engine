@@ -10,10 +10,14 @@ POS_INF = float('inf')
 WHITE_STRING = "White"
 KING_STRING = "King"
 PAWN_STRING = "Pawn"
+QUEEN_STRING = "Queen"
+BISHOP_STRING = "Bishop"
+ROOK_STRING = "Rook"
+KNIGHT_STRING = "Knight"
 
-WEAK_POINTS_ORDER = ["Rook", "Bishop", "Knight"]
-MOVE_PIECE_ORDER = ["Queen", "Rook", "Bishop", "Knight", "Pawn", "King"]
-VALUABLE_PIECE_ORDER = ["Queen", "Rook", "Bishop", "Knight"]
+WEAK_POINTS_ORDER = [ROOK_STRING, BISHOP_STRING, KNIGHT_STRING]
+MOVE_PIECE_ORDER = [QUEEN_STRING, ROOK_STRING, BISHOP_STRING, KNIGHT_STRING, PAWN_STRING, KING_STRING]
+VALUABLE_PIECE_ORDER = [QUEEN_STRING, ROOK_STRING, BISHOP_STRING, KNIGHT_STRING]
 
 def find_col(pos):
     return ord(pos[0])
@@ -35,43 +39,43 @@ def is_valid_position(row: int, col: int):
 Returns True iff pos can be captured or threatened, not blocked by same color piece
 '''
 def is_targetable_position(pos: tuple, gameboard: dict, is_black: bool):
-    return is_black and gameboard[pos][1] == WHITE_STRING
+    return (is_black and gameboard[pos][1] == WHITE_STRING) or (not is_black and gameboard[pos][1] != WHITE_STRING)
 
 class Piece:
     white_symbols = {
-        "King": "♚",
-        "Queen": "♛",
-        "Knight": "♞",
-        "Bishop": "♝",
-        "Rook": "♜",
-        "Pawn": "♟"
+        KING_STRING: "♚",
+        QUEEN_STRING: "♛",
+        KNIGHT_STRING: "♞",
+        BISHOP_STRING: "♝",
+        ROOK_STRING: "♜",
+        PAWN_STRING: "W"#"♟"
     }
 
     black_symbols = {
-        "King": "♔",
-        "Queen": "♕",
-        "Knight": "♘",
-        "Bishop": "♗",
-        "Rook": "♖",
-        "Pawn": "♙"
+        KING_STRING: "♔",
+        QUEEN_STRING: "♕",
+        KNIGHT_STRING: "♘",
+        BISHOP_STRING: "♗",
+        ROOK_STRING: "♖",
+        PAWN_STRING: "B"#"♙"
     }
 
     score = {
-        "King": 100,
-        "Queen": 9,
-        "Rook": 5,
-        "Bishop": 4,
-        "Knight": 4,
-        "Pawn": 1
+        KING_STRING: 100,
+        QUEEN_STRING: 9,
+        ROOK_STRING: 5,
+        BISHOP_STRING: 4,
+        KNIGHT_STRING: 4,
+        PAWN_STRING: 1
     }
 
     threatened_score = {
-        "King": 9,
-        "Queen": 4.5,
-        "Rook": 3,
-        "Bishop": 2,
-        "Knight": 2,
-        "Pawn": 0.5
+        KING_STRING: 9,
+        QUEEN_STRING: 4.5,
+        ROOK_STRING: 3,
+        BISHOP_STRING: 2,
+        KNIGHT_STRING: 2,
+        PAWN_STRING: 0.5
     }
 
     white_pawn_attack_moveset = [(1, 1), (1, -1)]
@@ -81,14 +85,15 @@ class Piece:
     king_moveset = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
     knight_moveset = [(1, 2), (1, -2), (2, 1), (2, -1), (-1, 2), (-1, -2), (-2, 1), (-2, -1)] 
 
-    def calculate_threat(threat_set: set, board: dict, capture_candidates: set):
+    def calculate_threat(threat_set: set, board: dict, capture_candidates: set, player: bool):
         score = 0
         for pos in threat_set:
             if pos in board:
                 piece_type = board[pos][0]
                 score += Piece.threatened_score[piece_type]
-                if board[pos][1] != WHITE_STRING:
-                    # This Black Piece is being threatened
+                opp_piece_is_white = board[pos][1] == WHITE_STRING
+                if (opp_piece_is_white and player is MIN) or (opp_piece_is_white and player is MAX):
+                    # This Piece is being threatened
                     capture_candidates.add(pos)
         return score
 
@@ -104,11 +109,11 @@ class Piece:
 
         if piece_type == PAWN_STRING:
             Piece.pawn_threatens(current_pos_desc, threatened_places, gameboard, is_black)
-        if piece_type == "Rook" or piece_type == "Queen":
+        if piece_type == ROOK_STRING or piece_type == QUEEN_STRING:
             Piece.rook_threatens(current_pos_desc, threatened_places, gameboard, is_black)
-        if piece_type == "Bishop" or piece_type == "Queen":
+        if piece_type == BISHOP_STRING or piece_type == QUEEN_STRING:
             Piece.bishop_threatens(current_pos_desc, threatened_places, gameboard, is_black)
-        if piece_type == "Knight":
+        if piece_type == KNIGHT_STRING:
             Piece.knight_threatens(current_pos_desc, threatened_places, gameboard, is_black)
         if piece_type == KING_STRING:
             Piece.king_threatens(current_pos_desc, threatened_places, gameboard, is_black)
@@ -117,7 +122,7 @@ class Piece:
         
     '''
     @param pos Position of Pawn e.g. ('a', 1)
-    @param threat_set Set of positions that are threatened by the pawn
+    @param threat_set Set of positions that are threatened by the pawn, is mutated
     @param gameboard Dictionary of gameboard
     @param is_black Boolean for whether the pawn is black or white
     Adds places that pawn threatens to threat_set
@@ -126,12 +131,22 @@ class Piece:
         current_row = find_row(pos)
         current_col = find_col(pos)
 
+        # Positions Pawn can capture
         moveset = Piece.black_pawn_attack_moveset if is_black else Piece.white_pawn_attack_moveset
         for move in moveset:
             row = current_row + move[0]
             col = current_col + move[1]
             pos = find_position(row, col)
-            if is_valid_position(row, col) and (pos not in gameboard or (pos in gameboard and is_targetable_position(pos, gameboard, is_black))):
+            if is_valid_position(row, col) and (pos in gameboard and is_targetable_position(pos, gameboard, is_black)):
+                threat_set.add(pos)
+
+        # Positions Pawn can move to
+        moveset = Piece.black_pawn_moveset if is_black else Piece.white_pawn_moveset
+        for move in moveset:
+            row = current_row + move[0]
+            col = current_col + move[1]
+            pos = find_position(row, col)
+            if is_valid_position(row, col) and (pos not in gameboard):
                 threat_set.add(pos)
 
     '''
@@ -285,11 +300,11 @@ class Piece:
             else:
                 threat_set.add(pos)
 
-    def is_checkmate(king_pos: tuple, enemy_threats):
+    def is_checkmate(king_pos: tuple, enemy_threats: dict):
         # Check King Moveset for intersection with enemy_threats
         current_row = find_row(king_pos)
         current_col = find_col(king_pos)
-        king_can_survive = True
+        king_checkmate = True #Assume True, if its False we'll find out
         
         for move in Piece.king_moveset:
             row = current_row + move[0]
@@ -299,16 +314,24 @@ class Piece:
             else:
                 pos = find_position(row, col)
                 if pos not in enemy_threats:
-                    king_can_survive = False
+                    king_checkmate = False
                     break
-        
-        return king_can_survive
+        king_check = king_pos in enemy_threats
+
+        return king_check and king_checkmate
     
-    def moves_threatening_king(our_threats: dict, enemy_weak_points: set):
-        attacking_points = our_threats.keys() & enemy_weak_points
+    def moves_threatening_king(our_threats: dict, enemy_weak_points: dict, our_pieces: dict):
         moves = []
-        for point in attacking_points:
-            moves.append((our_threats[point], point))
+        for piece in VALUABLE_PIECE_ORDER:
+            # Common points that piece can move to, in order to threaten enemy King
+            attacking_points = our_threats.keys() & enemy_weak_points[piece]
+            
+            for point in attacking_points:
+                piece_pos = our_pieces[piece]
+                # If this piece's position is inside the set of all positions from which we can move to point from
+                if piece_pos in our_threats[point]:
+                    moves.append((piece_pos, point))
+
         return moves
 
     def moves_attacking_king(king_pos: tuple, our_threats: dict):
@@ -318,7 +341,9 @@ class Piece:
         moves = []
 
         if king_pos in our_threats:
-            moves.append(king_pos)
+            # Pick some element from set and add move to capture King
+            start_pos = next(iter(our_threats[king_pos]))
+            moves.append((start_pos, king_pos))
         
         for move in Piece.king_moveset:
             row = current_row + move[0]
@@ -328,28 +353,37 @@ class Piece:
             else:
                 pos = find_position(row, col)
                 if pos in our_threats:
-                    moves.append(pos)
+                    start_pos = next(iter(our_threats[pos]))
+                    moves.append((start_pos, pos))
         return moves
 
-    def moves_attacking_others(capture_candidates: set, black_pieces: dict, our_threats: dict):
+    def moves_attacking_others(capture_candidates: set, enemy_pieces: dict, our_threats: dict):
         moves = []
         for piece in VALUABLE_PIECE_ORDER:
-            if piece in black_pieces and black_pieces[piece] in capture_candidates:
-                piece_to_capture_pos = black_pieces[piece]
-                moves.append((our_threats[piece_to_capture_pos], piece_to_capture_pos))
-        if PAWN_STRING in black_pieces:
-            for pos in black_pieces[PAWN_STRING]:
+            # If it's a piece that exists and it is a piece that can be captured
+            if piece in enemy_pieces and enemy_pieces[piece] in capture_candidates:
+                piece_to_capture_pos = enemy_pieces[piece]
+                moves.append((next(iter(our_threats[piece_to_capture_pos])), piece_to_capture_pos))
+        if PAWN_STRING in enemy_pieces:
+            for pos in enemy_pieces[PAWN_STRING]:
                 if pos in capture_candidates:
-                    moves.append((our_threats[pos], pos))
+                    moves.append((next(iter(our_threats[pos])), pos))
         return moves
 
-    def king_weak_points(king_pos: tuple, gameboard: dict):
-        weak_points = set()
-        # Rook, Bishop, Knight possible attacks
+    def king_weak_points(king_pos: tuple, gameboard: dict, enemy_pieces: dict, is_black: bool):
+        weak_points = {}
+        # Rook, Bishop, Knight possible attacks - Queen avoided because possible attacks from Rook, Bishop cover it
         for piece in WEAK_POINTS_ORDER:
-            weak_points.update(Piece.assign_threats(piece, king_pos, gameboard, False))
+            weak_points[piece] = set()
+            if piece in enemy_pieces:
+                weak_points[piece] = Piece.assign_threats(piece, king_pos, gameboard, is_black)
+        
+        weak_points[QUEEN_STRING] = weak_points[ROOK_STRING].union(weak_points[BISHOP_STRING])
+
+        pawn_set = set()
         # Pawn possible attacks - Black King can be attacked by White Pawns only - mimicking Black Pawn moveset since it's reversed
-        Piece.pawn_threatens(king_pos, weak_points, gameboard, True)
+        Piece.pawn_threatens(king_pos, pawn_set, gameboard, not is_black)
+        weak_points[PAWN_STRING] = pawn_set
 
         return weak_points
 
@@ -362,10 +396,12 @@ class GameBoard:
         self.board = board
         self.black_pieces = black_pieces
         self.white_pieces = white_pieces
-        self.min_threats = set()
+        self.min_threats = {}
         self.max_threats = {}
-        self.black_king_weak_points = set()
+        self.black_king_weak_points = {}
+        self.white_king_weak_points = {}
         self.black_capture_candidates = set()
+        self.white_capture_candidates = set()
         self.piece_score = 0
         self.threat_score = 0
         
@@ -379,8 +415,8 @@ class GameBoard:
                     self.white_pieces[piece_type] = pos
                 self.piece_score += Piece.score[piece_type]
                 threat_set = Piece.assign_threats(piece_type, pos, board, False)
-                self.threat_score += Piece.calculate_threat(threat_set, board, self.black_capture_candidates)
-                self.max_threats.update({threatened_pos: pos for threatened_pos in threat_set})
+                self.threat_score += Piece.calculate_threat(threat_set, board, self.black_capture_candidates, MAX)
+                self.update_pieces_with_threats(MAX, threat_set, pos)
 
             else:
                 if piece_type == PAWN_STRING:
@@ -389,8 +425,8 @@ class GameBoard:
                     self.black_pieces[piece_type] = pos
                 self.piece_score -= Piece.score[piece_type]
                 threat_set = Piece.assign_threats(piece_type, pos, board, True)
-                self.threat_score -= Piece.calculate_threat(threat_set, board, set())
-                self.min_threats.update(threat_set)
+                self.threat_score -= Piece.calculate_threat(threat_set, board, self.white_capture_candidates, MIN)
+                self.update_pieces_with_threats(MIN, threat_set, pos)
         
         self.is_terminal_game = False
         
@@ -400,10 +436,11 @@ class GameBoard:
         if KING_STRING in self.white_pieces:
             white_king_pos = self.white_pieces[KING_STRING]
             self.is_terminal_game = Piece.is_checkmate(white_king_pos, self.min_threats)
+            self.white_king_weak_points = Piece.king_weak_points(white_king_pos, board, self.black_pieces, False)
         if KING_STRING in self.black_pieces:
             black_king_pos = self.black_pieces[KING_STRING]
             self.is_terminal_game = self.is_terminal_game or Piece.is_checkmate(black_king_pos, self.max_threats)
-            self.black_king_weak_points = Piece.king_weak_points(black_king_pos, board)
+            self.black_king_weak_points = Piece.king_weak_points(black_king_pos, board, self.white_pieces, True)
     
     '''
     Returns True if the State is a Win, Loss or Draw State - No Piece threatening each other
@@ -414,14 +451,32 @@ class GameBoard:
     def actions(self, player: bool):
         moves = []
         
-        # Moves that capture King
-        moves.extend(Piece.moves_attacking_king(self.black_pieces[KING_STRING], self.max_threats))
+        if player is MAX:
+            # Moves that capture King
+            moves.extend(Piece.moves_attacking_king(self.black_pieces[KING_STRING], self.max_threats))
 
-        # Moves that will threaten King
-        moves.extend(Piece.moves_threatening_king(self.max_threats, self.black_king_weak_points))
+            # Moves that will threaten King
+            moves.extend(Piece.moves_threatening_king(self.max_threats, self.black_king_weak_points, self.white_pieces))
 
-        # Moves that will capture pieces
-        moves.extend(Piece.moves_attacking_others(self.black_capture_candidates, self.black_pieces, self.max_threats))
+            # Moves that will capture pieces
+            moves.extend(Piece.moves_attacking_others(self.black_capture_candidates, self.black_pieces, self.max_threats))
+
+            if not moves: # no moves - add random moves
+                moves.extend(list(map(lambda x: (next(iter(self.max_threats[x])), x), list(self.max_threats.keys()))))
+
+
+        else:
+            # Moves that capture King
+            moves.extend(Piece.moves_attacking_king(self.white_pieces[KING_STRING], self.min_threats))
+
+            # Moves that will threaten King
+            moves.extend(Piece.moves_threatening_king(self.min_threats, self.white_king_weak_points, self.black_pieces))
+
+            # Moves that will capture pieces
+            moves.extend(Piece.moves_attacking_others(self.white_capture_candidates, self.white_pieces, self.min_threats))
+
+            if not moves:
+                moves.extend(list(map(lambda x: (next(iter(self.min_threats[x])), x), list(self.min_threats.keys()))))
 
         return moves
 
@@ -488,7 +543,15 @@ class GameBoard:
         elif num_moves >= 50 and KING_STRING in self.black_pieces and KING_STRING in self.white_pieces:
             return 0 # Draw - Zero Value
         else:
-            return self.threat_score + self.piece_score # Calculated Utility for this State               
+            return self.threat_score + self.piece_score # Calculated Utility for this State
+    
+    def update_pieces_with_threats(self, player: bool, threat_set: set, pos: tuple):
+        threat_dict = self.max_threats if player is MAX else self.min_threats
+        for threatened_pos in threat_set:
+            if threatened_pos not in threat_dict:
+                threat_dict[threatened_pos] = set()
+            threat_dict[threatened_pos].add(pos)
+    
 
 def print_game(gameboard: GameBoard):
     horizontal_line = '-' * gameboard.n * 4
@@ -523,6 +586,7 @@ def ab(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta, play
             alpha = max(maxEval, alpha)
             if beta <= alpha:
                 break
+        return maxEval
 
     elif player is MIN:
         minEval = POS_INF
@@ -533,28 +597,29 @@ def ab(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta, play
             beta = min(minEval, beta)
             if beta <= alpha:
                 break
+        return minEval
 
 starting_pieces = {
-        ("e", 4) : ("King", "Black"),
-        ("d", 4): ("Queen", "Black"),
-        ("c", 4): ("Bishop", "Black"),
-        ("b", 4): ("Knight", "Black"),
-        ("a", 4): ("Rook", "Black"),
-        ("a", 3): ("Pawn", "Black"),
-        ("b", 3): ("Pawn", "Black"),
-        ("c", 3): ("Pawn", "Black"),
-        ("d", 3): ("Pawn", "Black"),
-        ("e", 3): ("Pawn", "Black"),
-        ("e", 0) : ("King", "White"),
-        ("d", 0): ("Queen", "White"),
-        ("c", 0): ("Bishop", "White"),
-        ("b", 0): ("Knight", "White"),
-        ("a", 0): ("Rook", "White"),
-        ("a", 1): ("Pawn", "White"),
-        ("b", 1): ("Pawn", "White"),
-        ("c", 1): ("Pawn", "White"),
-        ("d", 1): ("Pawn", "White"),
-        ("e", 1): ("Pawn", "White")
+        ("e", 4) : (KING_STRING, "Black"),
+        ("d", 4): (QUEEN_STRING, "Black"),
+        ("c", 4): (BISHOP_STRING, "Black"),
+        ("b", 4): (KNIGHT_STRING, "Black"),
+        ("a", 4): (ROOK_STRING, "Black"),
+        ("a", 3): (PAWN_STRING, "Black"),
+        ("b", 3): (PAWN_STRING, "Black"),
+        ("c", 3): (PAWN_STRING, "Black"),
+        ("d", 3): (PAWN_STRING, "Black"),
+        ("e", 3): (PAWN_STRING, "Black"),
+        ("e", 0) : (KING_STRING, WHITE_STRING),
+        ("d", 0): (QUEEN_STRING, WHITE_STRING),
+        ("c", 0): (BISHOP_STRING, WHITE_STRING),
+        ("b", 0): (KNIGHT_STRING, WHITE_STRING),
+        ("a", 0): (ROOK_STRING, WHITE_STRING),
+        ("a", 1): (PAWN_STRING, WHITE_STRING),
+        ("b", 1): (PAWN_STRING, WHITE_STRING),
+        ("c", 1): (PAWN_STRING, WHITE_STRING),
+        ("d", 1): (PAWN_STRING, WHITE_STRING),
+        ("e", 1): (PAWN_STRING, WHITE_STRING)
     }
 
 ### DO NOT EDIT/REMOVE THE FUNCTION HEADER BELOW###
