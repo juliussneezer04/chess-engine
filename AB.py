@@ -390,12 +390,12 @@ class Piece:
 class GameBoard:
     n = TOTAL
     
-    def __init__(self, board: dict, black_pieces: dict, white_pieces: dict):
+    def __init__(self, board: dict):#, black_pieces: dict, white_pieces: dict):
         self.rows = TOTAL
         self.cols = TOTAL
         self.board = board
-        self.black_pieces = black_pieces
-        self.white_pieces = white_pieces
+        self.black_pieces = {PAWN_STRING: []}#black_pieces
+        self.white_pieces = {PAWN_STRING: []}#white_pieces
         self.min_threats = {}
         self.max_threats = {}
         self.black_king_weak_points = {}
@@ -486,37 +486,39 @@ class GameBoard:
         moving_piece_type = self.board[start][0]
         captured_piece_type = "" # Updated Later if piece is captured
         is_capture = end in self.board
-        next_black_pieces = dict(self.black_pieces)
-        next_white_pieces = dict(self.white_pieces)
+        # next_black_pieces = dict(self.black_pieces)
+        # next_white_pieces = dict(self.white_pieces)
         next_board = dict(self.board)
         
+        # print_game(self)
         # Update Pieces table if captured
-        if is_capture:
-            captured_piece_type = self.board[end][0]
-            if captured_piece_type == PAWN_STRING:
-                if is_min_move:
-                    next_white_pieces[captured_piece_type].remove(end)    
-                else:
-                    next_black_pieces[captured_piece_type].remove(end)
-            else:
-                if is_min_move:
-                    del next_white_pieces[captured_piece_type]
-                else:
-                    del next_black_pieces[captured_piece_type]
+        # if is_capture:
+        #     captured_piece_type = self.board[end][0]
+        #     if captured_piece_type == PAWN_STRING:
+        #         if is_min_move:
+        #             #TODO: Pawn List is not being updated and keeps adding on
+        #             next_white_pieces[captured_piece_type].remove(end)    
+        #         else:
+        #             next_black_pieces[captured_piece_type].remove(end)
+        #     else:
+        #         if is_min_move:
+        #             del next_white_pieces[captured_piece_type]
+        #         else:
+        #             del next_black_pieces[captured_piece_type]
                 
-        # Update Pieces table for moving piece
-        if moving_piece_type == PAWN_STRING:
-            if is_min_move:
-                next_black_pieces[moving_piece_type].remove(start)
-                next_black_pieces[moving_piece_type].append(end)
-            else:
-                next_white_pieces[moving_piece_type].remove(start)
-                next_white_pieces[moving_piece_type].append(end)
-        else:
-            if is_min_move:
-                next_black_pieces[moving_piece_type] = end
-            else:
-                next_white_pieces[moving_piece_type] = end
+        # # Update Pieces table for moving piece
+        # if moving_piece_type == PAWN_STRING:
+        #     if is_min_move:
+        #         next_black_pieces[moving_piece_type].remove(start)
+        #         next_black_pieces[moving_piece_type].append(end)
+        #     else:
+        #         next_white_pieces[moving_piece_type].remove(start)
+        #         next_white_pieces[moving_piece_type].append(end)
+        # else:
+        #     if is_min_move:
+        #         next_black_pieces[moving_piece_type] = end
+        #     else:
+        #         next_white_pieces[moving_piece_type] = end
         
         # Update Board
         del next_board[start]
@@ -525,7 +527,7 @@ class GameBoard:
         else:
             next_board[end] = (moving_piece_type, WHITE_STRING)
 
-        next_gameboard = GameBoard(next_board, next_black_pieces, next_white_pieces)
+        next_gameboard = GameBoard(next_board)#, next_black_pieces, next_white_pieces)
         if is_capture:
             return (0, next_gameboard)
         else:
@@ -569,35 +571,48 @@ def print_game(gameboard: GameBoard):
         print(row_string)
         print(horizontal_line)
 
-#Implement your minimax with alpha-beta pruning algorithm here.
-def ab(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta, player: bool):
+
+def max_move(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta, score_to_move: dict):
     #  if we are at a leaf node, or if MAX/MIN cannot make any more moves
-    print_game(gameboard)
+    # print_game(gameboard)
     if depth == 0 or gameboard.is_terminal() or num_moves_without_capture == 50:
         return gameboard.evaluation(num_moves_without_capture) # Evaluation of Leaf Nodes
     
-    moves = gameboard.actions(player)
-    if player is MAX:
-        maxEval = NEG_INF
-        for move in moves: # Move Ordering done here
-            num_moves_without_capture, next_gameboard = gameboard.execute_move(move, num_moves_without_capture, False)
-            eval = ab(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, MIN)
-            maxEval = max(maxEval, eval)
-            alpha = max(maxEval, alpha)
-            if beta <= alpha:
-                break
-        return maxEval
+    moves = gameboard.actions(MAX)
+    maxEval = NEG_INF
+    for move in moves: # Move Ordering done here
+        num_moves_without_capture, next_gameboard = gameboard.execute_move(move, num_moves_without_capture, False)
+        eval = min_move(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, score_to_move)
+        score_to_move[eval] = move
+        maxEval = max(maxEval, eval)
+        alpha = max(maxEval, alpha)
+        if beta <= alpha:
+            break
+    return maxEval
 
-    elif player is MIN:
-        minEval = POS_INF
-        for move in moves: # Move Ordering done here
-            num_moves_without_capture, next_gameboard = gameboard.execute_move(move, num_moves_without_capture, True)
-            eval = ab(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, MAX)
-            minEval = min(minEval, eval)
-            beta = min(minEval, beta)
-            if beta <= alpha:
-                break
-        return minEval
+def min_move(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta, score_to_move: dict):
+    #  if we are at a leaf node, or if MAX/MIN cannot make any more moves
+    # print_game(gameboard)
+    if depth == 0 or gameboard.is_terminal() or num_moves_without_capture == 50:
+        return gameboard.evaluation(num_moves_without_capture) # Evaluation of Leaf Nodes
+    
+    moves = gameboard.actions(MIN)
+    minEval = POS_INF
+    for move in moves: # Move Ordering done here
+        num_moves_without_capture, next_gameboard = gameboard.execute_move(move, num_moves_without_capture, True)
+        eval = max_move(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, score_to_move)
+        score_to_move[eval] = move
+        minEval = min(minEval, eval)
+        beta = min(minEval, beta)
+        if beta <= alpha:
+            break
+    return minEval
+    
+#Implement your minimax with alpha-beta pruning algorithm here.
+def ab(gameboard: GameBoard):
+    score_to_move = {}
+    best_value = max_move(gameboard, 0, 4, NEG_INF, POS_INF, score_to_move)
+    return score_to_move[best_value]
 
 starting_pieces = {
         ("e", 4) : (KING_STRING, "Black"),
@@ -644,12 +659,12 @@ starting_pieces = {
 def studentAgent(gameboard):
     # MAX is always White piece
 
-    black_pieces = {PAWN_STRING: []}
-    white_pieces = {PAWN_STRING: []}
-    game_board = GameBoard(gameboard, black_pieces, white_pieces)
+    # black_pieces = {PAWN_STRING: []}
+    # white_pieces = {PAWN_STRING: []}
+    game_board = GameBoard(gameboard)#, black_pieces, white_pieces)
     # print_game(game_board)
     
-    move = ab(game_board, 0, 4, NEG_INF, POS_INF, MAX)
+    move = ab(game_board)
     print(move)
     return move
 
