@@ -70,7 +70,7 @@ class Piece:
     }
 
     threatened_score = {
-        KING_STRING: 9,
+        KING_STRING: 50,
         QUEEN_STRING: 4.5,
         ROOK_STRING: 3,
         BISHOP_STRING: 2,
@@ -92,7 +92,7 @@ class Piece:
                 piece_type = board[pos][0]
                 score += Piece.threatened_score[piece_type]
                 opp_piece_is_white = board[pos][1] == WHITE_STRING
-                if (opp_piece_is_white and player is MIN) or (opp_piece_is_white and player is MAX):
+                if (opp_piece_is_white and player is MIN) or (not opp_piece_is_white and player is MAX):
                     # This Piece is being threatened
                     capture_candidates.add(pos)
         return score
@@ -435,18 +435,19 @@ class GameBoard:
             self.is_terminal_game = True # Since a King is captured
         if KING_STRING in self.white_pieces:
             white_king_pos = self.white_pieces[KING_STRING]
-            self.is_terminal_game = Piece.is_checkmate(white_king_pos, self.min_threats)
+            self.threat_score -= Piece.threatened_score[KING_STRING] if Piece.is_checkmate(white_king_pos, self.min_threats) else 0
             self.white_king_weak_points = Piece.king_weak_points(white_king_pos, board, self.black_pieces, False)
         if KING_STRING in self.black_pieces:
             black_king_pos = self.black_pieces[KING_STRING]
-            self.is_terminal_game = self.is_terminal_game or Piece.is_checkmate(black_king_pos, self.max_threats)
+            self.threat_score += Piece.threatened_score[KING_STRING] if Piece.is_checkmate(black_king_pos, self.max_threats) else 0
             self.black_king_weak_points = Piece.king_weak_points(black_king_pos, board, self.white_pieces, True)
     
     '''
     Returns True if the State is a Win, Loss or Draw State - No Piece threatening each other
     '''
-    def is_terminal(self):
-        return self.is_terminal_game or (len(self.max_threats) == 0 and len(self.min_threats) == 0)
+    def is_terminal(self, player):
+        self.moves = self.actions(player)
+        return self.is_terminal_game or (len(self.max_threats) == 0) if player is MAX else (len(self.min_threats) == 0) or len(self.moves) == 0
     
     def actions(self, player: bool):
         moves = []
@@ -536,8 +537,8 @@ class GameBoard:
     '''
     Returns 400 for win state, -400 for loss state, 0 for draw state, calculates piece and threats score to decide other states' value
     '''
-    def evaluation(self, num_moves):
-        if self.is_terminal():
+    def evaluation(self, num_moves, player):
+        if self.is_terminal(player):
             if KING_STRING in self.black_pieces and Piece.is_checkmate(self.black_pieces[KING_STRING], self.max_threats):
                 return 400 # Win State -  Arbitrarily Large Number
             elif KING_STRING in self.black_pieces and Piece.is_checkmate(self.white_pieces[KING_STRING], self.min_threats):
@@ -555,64 +556,69 @@ class GameBoard:
             threat_dict[threatened_pos].add(pos)
     
 
-def print_game(gameboard: GameBoard):
-    horizontal_line = '-' * gameboard.n * 4
-    print("  " + " | ".join(alphabet[:gameboard.n]))
-    for i in range(gameboard.rows):
-        row_string = str(i) + " "
-        for j in range(97, 97 + gameboard.cols):
-            next_piece_str = " "
-            current_piece = find_position(i, j)
-            if current_piece in gameboard.board and gameboard.board[current_piece][1] != WHITE_STRING:
-                next_piece_str = Piece.black_symbols[(gameboard.board[current_piece][0])]
-            elif current_piece in gameboard.board and gameboard.board[current_piece][1] == WHITE_STRING:
-                next_piece_str = Piece.white_symbols[(gameboard.board[current_piece][0])]
-            row_string += next_piece_str + " | "
-        print(row_string)
-        print(horizontal_line)
+# def print_game(gameboard: GameBoard):
+#     horizontal_line = '-' * gameboard.n * 4
+#     print("  " + " | ".join(alphabet[:gameboard.n]))
+#     for i in range(gameboard.rows):
+#         row_string = str(i) + " "
+#         for j in range(97, 97 + gameboard.cols):
+#             next_piece_str = " "
+#             current_piece = find_position(i, j)
+#             if current_piece in gameboard.board and gameboard.board[current_piece][1] != WHITE_STRING:
+#                 next_piece_str = Piece.black_symbols[(gameboard.board[current_piece][0])]
+#             elif current_piece in gameboard.board and gameboard.board[current_piece][1] == WHITE_STRING:
+#                 next_piece_str = Piece.white_symbols[(gameboard.board[current_piece][0])]
+#             row_string += next_piece_str + " | "
+#         print(row_string)
+#         print(horizontal_line)
 
 
-def max_move(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta, score_to_move: dict):
+def max_move(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta):
     #  if we are at a leaf node, or if MAX/MIN cannot make any more moves
     # print_game(gameboard)
-    if depth == 0 or gameboard.is_terminal() or num_moves_without_capture == 50:
-        return gameboard.evaluation(num_moves_without_capture) # Evaluation of Leaf Nodes
+    if depth == 0 or gameboard.is_terminal(MAX) or num_moves_without_capture == 50:
+        return gameboard.evaluation(num_moves_without_capture, MAX), None # Evaluation of Leaf Nodes
     
-    moves = gameboard.actions(MAX)
+    # moves = gameboard.actions(MAX)
     maxEval = NEG_INF
-    for move in moves: # Move Ordering done here
+    best_move = None
+    for move in gameboard.moves: # Move Ordering done here
         num_moves_without_capture, next_gameboard = gameboard.execute_move(move, num_moves_without_capture, False)
-        eval = min_move(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, score_to_move)
-        score_to_move[eval] = move
-        maxEval = max(maxEval, eval)
+        eval, returned_move = min_move(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, score_to_move)
+        if eval > maxEval:
+            maxEval = eval
+            best_move = move
         alpha = max(maxEval, alpha)
-        if beta <= alpha:
+        if beta <= eval:
+            # return (eval, move)
             break
-    return maxEval
+    return (maxEval, best_move)
 
-def min_move(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta, score_to_move: dict):
+def min_move(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta):
     #  if we are at a leaf node, or if MAX/MIN cannot make any more moves
     # print_game(gameboard)
-    if depth == 0 or gameboard.is_terminal() or num_moves_without_capture == 50:
-        return gameboard.evaluation(num_moves_without_capture) # Evaluation of Leaf Nodes
+    if depth == 0 or gameboard.is_terminal(MIN) or num_moves_without_capture == 50:
+        return gameboard.evaluation(num_moves_without_capture, MIN) # Evaluation of Leaf Nodes
     
-    moves = gameboard.actions(MIN)
+    # moves = gameboard.actions(MIN)
     minEval = POS_INF
-    for move in moves: # Move Ordering done here
+    best_move = None
+    for move in gameboard.moves: # Move Ordering done here
         num_moves_without_capture, next_gameboard = gameboard.execute_move(move, num_moves_without_capture, True)
-        eval = max_move(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, score_to_move)
-        score_to_move[eval] = move
-        minEval = min(minEval, eval)
+        eval, returned_move = max_move(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, score_to_move)
+        if eval < minEval:
+            minEval = eval
+            best_move = move
         beta = min(minEval, beta)
-        if beta <= alpha:
+        if eval <= alpha:
+            # return (eval, move)
             break
-    return minEval
+    return (minEval, best_move)
     
 #Implement your minimax with alpha-beta pruning algorithm here.
 def ab(gameboard: GameBoard):
-    score_to_move = {}
-    best_value = max_move(gameboard, 0, 4, NEG_INF, POS_INF, score_to_move)
-    return score_to_move[best_value]
+    best_value, move = max_move(gameboard, 0, 4, NEG_INF, POS_INF)
+    return move
 
 starting_pieces = {
         ("e", 4) : (KING_STRING, "Black"),
@@ -665,7 +671,7 @@ def studentAgent(gameboard):
     # print_game(game_board)
     
     move = ab(game_board)
-    print(move)
+    # print(move)
     return move
 
 studentAgent(starting_pieces)
