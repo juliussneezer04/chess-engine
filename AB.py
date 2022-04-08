@@ -323,6 +323,8 @@ class Piece:
     def moves_threatening_king(our_threats: dict, enemy_weak_points: dict, our_pieces: dict):
         moves = []
         for piece in VALUABLE_PIECE_ORDER:
+            if piece not in our_pieces: # We can't do anything anyways
+                continue
             # Common points that piece can move to, in order to threaten enemy King
             attacking_points = our_threats.keys() & enemy_weak_points[piece]
             
@@ -430,8 +432,7 @@ class GameBoard:
         
         self.is_terminal_game = False
         
-        # Check if White King is threatened
-        if not KING_STRING in self.white_pieces and not KING_STRING in self.black_pieces:
+        if not KING_STRING in self.white_pieces or not KING_STRING in self.black_pieces:
             self.is_terminal_game = True # Since a King is captured
         if KING_STRING in self.white_pieces:
             white_king_pos = self.white_pieces[KING_STRING]
@@ -446,8 +447,11 @@ class GameBoard:
     Returns True if the State is a Win, Loss or Draw State - No Piece threatening each other
     '''
     def is_terminal(self, player):
-        self.moves = self.actions(player)
-        return self.is_terminal_game or (len(self.max_threats) == 0) if player is MAX else (len(self.min_threats) == 0) or len(self.moves) == 0
+        if self.is_terminal_game:
+            return True
+        else:
+            self.moves = self.actions(player)
+            return self.is_terminal_game or (len(self.max_threats) == 0) if player is MAX else (len(self.min_threats) == 0) or len(self.moves) == 0
     
     def actions(self, player: bool):
         moves = []
@@ -487,7 +491,7 @@ class GameBoard:
         moving_piece_type = self.board[start][0]
         is_capture = end in self.board
         next_board = dict(self.board)
-        
+        print_game(self)/
         # Update Board
         del next_board[start]
         if is_min_move:
@@ -551,7 +555,7 @@ def max_move(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta
     best_move = None
     for move in gameboard.moves: # Move Ordering done here
         num_moves_without_capture, next_gameboard = gameboard.execute_move(move, num_moves_without_capture, False)
-        eval, returned_move = min_move(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, score_to_move)
+        eval, returned_move = min_move(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta)
         if eval > maxEval:
             maxEval = eval
             best_move = move
@@ -572,7 +576,7 @@ def min_move(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta
     best_move = None
     for move in gameboard.moves: # Move Ordering done here
         num_moves_without_capture, next_gameboard = gameboard.execute_move(move, num_moves_without_capture, True)
-        eval, returned_move = max_move(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta, score_to_move)
+        eval, returned_move = max_move(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta)
         if eval < minEval:
             minEval = eval
             best_move = move
@@ -585,6 +589,7 @@ def min_move(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta
 #Implement your minimax with alpha-beta pruning algorithm here.
 def ab(gameboard: GameBoard):
     best_value, move = max_move(gameboard, 0, 4, NEG_INF, POS_INF)
+    # print(best_value)
     return move
 
 starting_pieces = {
