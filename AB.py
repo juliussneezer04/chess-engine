@@ -485,41 +485,8 @@ class GameBoard:
         start = move[0]
         end = move[1]
         moving_piece_type = self.board[start][0]
-        captured_piece_type = "" # Updated Later if piece is captured
         is_capture = end in self.board
-        # next_black_pieces = dict(self.black_pieces)
-        # next_white_pieces = dict(self.white_pieces)
         next_board = dict(self.board)
-        
-        # print_game(self)
-        # Update Pieces table if captured
-        # if is_capture:
-        #     captured_piece_type = self.board[end][0]
-        #     if captured_piece_type == PAWN_STRING:
-        #         if is_min_move:
-        #             #TODO: Pawn List is not being updated and keeps adding on
-        #             next_white_pieces[captured_piece_type].remove(end)    
-        #         else:
-        #             next_black_pieces[captured_piece_type].remove(end)
-        #     else:
-        #         if is_min_move:
-        #             del next_white_pieces[captured_piece_type]
-        #         else:
-        #             del next_black_pieces[captured_piece_type]
-                
-        # # Update Pieces table for moving piece
-        # if moving_piece_type == PAWN_STRING:
-        #     if is_min_move:
-        #         next_black_pieces[moving_piece_type].remove(start)
-        #         next_black_pieces[moving_piece_type].append(end)
-        #     else:
-        #         next_white_pieces[moving_piece_type].remove(start)
-        #         next_white_pieces[moving_piece_type].append(end)
-        # else:
-        #     if is_min_move:
-        #         next_black_pieces[moving_piece_type] = end
-        #     else:
-        #         next_white_pieces[moving_piece_type] = end
         
         # Update Board
         del next_board[start]
