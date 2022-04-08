@@ -451,7 +451,7 @@ class GameBoard:
             return True
         else:
             self.moves = self.actions(player)
-            return self.is_terminal_game or (len(self.max_threats) == 0) if player is MAX else (len(self.min_threats) == 0) or len(self.moves) == 0
+            return (len(self.max_threats) == 0) if player is MAX else (len(self.min_threats) == 0) or len(self.moves) == 0
     
     def actions(self, player: bool):
         moves = []
@@ -485,13 +485,13 @@ class GameBoard:
 
         return moves
 
-    def execute_move(self, move: tuple, num_moves_without_capture: int, is_min_move: bool):
+    def execute_move(self, move: tuple, is_min_move: bool):
         start = move[0]
         end = move[1]
         moving_piece_type = self.board[start][0]
         is_capture = end in self.board
         next_board = dict(self.board)
-        print_game(self)/
+        # print_game(self)
         # Update Board
         del next_board[start]
         if is_min_move:
@@ -500,24 +500,26 @@ class GameBoard:
             next_board[end] = (moving_piece_type, WHITE_STRING)
 
         next_gameboard = GameBoard(next_board)#, next_black_pieces, next_white_pieces)
-        if is_capture:
-            return (0, next_gameboard)
-        else:
-            return (num_moves_without_capture + 1, next_gameboard)
+        return next_gameboard
+        # if is_capture:
+        #     return (0, next_gameboard)
+        # else:
+        #     return (num_moves_without_capture + 1, next_gameboard)
     
     '''
     Returns 400 for win state, -400 for loss state, 0 for draw state, calculates piece and threats score to decide other states' value
     '''
-    def evaluation(self, num_moves, player):
-        if self.is_terminal(player):
-            if KING_STRING in self.black_pieces and Piece.is_checkmate(self.black_pieces[KING_STRING], self.max_threats):
-                return 400 # Win State -  Arbitrarily Large Number
-            elif KING_STRING in self.black_pieces and Piece.is_checkmate(self.white_pieces[KING_STRING], self.min_threats):
-                return -400 # Loss State - Arbitrarily Small Number
-        elif num_moves >= 50 and KING_STRING in self.black_pieces and KING_STRING in self.white_pieces:
-            return 0 # Draw - Zero Value
-        else:
-            return self.threat_score + self.piece_score # Calculated Utility for this State
+    def evaluation(self, player):
+        # if self.is_terminal(player):
+        #     if KING_STRING in self.black_pieces and Piece.is_checkmate(self.black_pieces[KING_STRING], self.max_threats):
+        #         return 400 # Win State -  Arbitrarily Large Number
+        #     elif KING_STRING in self.white_pieces and Piece.is_checkmate(self.white_pieces[KING_STRING], self.min_threats):
+        #         return -400 # Loss State - Arbitrarily Small Number
+        # # elif num_moves >= 50 and KING_STRING in self.black_pieces and KING_STRING in self.white_pieces:
+        # #     return 0 # Draw - Zero Value
+        # else:
+        final_score = self.threat_score + self.piece_score # Calculated Utility for this State
+        return final_score
     
     def update_pieces_with_threats(self, player: bool, threat_set: set, pos: tuple):
         threat_dict = self.max_threats if player is MAX else self.min_threats
@@ -544,51 +546,52 @@ class GameBoard:
 #         print(horizontal_line)
 
 
-def max_move(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta):
+def max_move(gameboard: GameBoard, depth, alpha, beta):
     #  if we are at a leaf node, or if MAX/MIN cannot make any more moves
-    # print_game(gameboard)
-    if depth == 0 or gameboard.is_terminal(MAX) or num_moves_without_capture == 50:
-        return gameboard.evaluation(num_moves_without_capture, MAX), None # Evaluation of Leaf Nodes
+    if depth == 0 or gameboard.is_terminal(MAX):# or num_moves_without_capture == 50:
+        eval = gameboard.evaluation(MAX) # Evaluation of Leaf Nodes
+        return eval, None
     
     # moves = gameboard.actions(MAX)
     maxEval = NEG_INF
     best_move = None
     for move in gameboard.moves: # Move Ordering done here
-        num_moves_without_capture, next_gameboard = gameboard.execute_move(move, num_moves_without_capture, False)
-        eval, returned_move = min_move(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta)
+        next_gameboard = gameboard.execute_move(move, False)
+        eval, returned_move = min_move(next_gameboard, depth - 1, alpha, beta)
         if eval > maxEval:
             maxEval = eval
             best_move = move
         alpha = max(maxEval, alpha)
         if beta <= eval:
-            # return (eval, move)
-            break
+            return (eval, move)
+            # break
     return (maxEval, best_move)
 
-def min_move(gameboard: GameBoard, num_moves_without_capture, depth, alpha, beta):
+def min_move(gameboard: GameBoard, depth, alpha, beta):
     #  if we are at a leaf node, or if MAX/MIN cannot make any more moves
-    # print_game(gameboard)
-    if depth == 0 or gameboard.is_terminal(MIN) or num_moves_without_capture == 50:
-        return gameboard.evaluation(num_moves_without_capture, MIN) # Evaluation of Leaf Nodes
+    if depth == 0 or gameboard.is_terminal(MIN):# or num_moves_without_capture == 50:
+        #TODO: Find out why this eval is None type sometimes
+        eval = gameboard.evaluation(MIN) # Evaluation of Leaf Nodes
+        return eval, None
     
     # moves = gameboard.actions(MIN)
     minEval = POS_INF
     best_move = None
     for move in gameboard.moves: # Move Ordering done here
-        num_moves_without_capture, next_gameboard = gameboard.execute_move(move, num_moves_without_capture, True)
-        eval, returned_move = max_move(next_gameboard, num_moves_without_capture, depth - 1, alpha, beta)
+        next_gameboard = gameboard.execute_move(move, True)
+        eval, returned_move = max_move(next_gameboard, depth - 1, alpha, beta)
         if eval < minEval:
             minEval = eval
             best_move = move
         beta = min(minEval, beta)
         if eval <= alpha:
-            # return (eval, move)
-            break
+            return (eval, move)
+            # break
     return (minEval, best_move)
     
 #Implement your minimax with alpha-beta pruning algorithm here.
 def ab(gameboard: GameBoard):
-    best_value, move = max_move(gameboard, 0, 4, NEG_INF, POS_INF)
+    best_value, move = max_move(gameboard, 3, NEG_INF, POS_INF)
     # print(best_value)
     return move
 
